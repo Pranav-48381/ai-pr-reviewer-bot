@@ -5,6 +5,7 @@ import hmac
 import hashlib
 from fastapi import FastAPI, Request, HTTPException, Header
 from dotenv import load_dotenv
+from fastapi.responses import HTMLResponse
 
 load_dotenv()
 
@@ -17,10 +18,28 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 if not GITHUB_TOKEN:
     raise ValueError("GITHUB_TOKEN environment variable is missing!")
 
-@app.get("/")
-def read_root():
-    return {"message": "AI PR Reviewer is awake in WSL!"}
 
+
+@app.get("/", response_class=HTMLResponse)
+def read_root():
+    return """
+    <html>
+        <head>
+            <title>AI PR Reviewer</title>
+            <style>
+                body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #0d1117; color: #c9d1d9; margin: 0; }
+                .card { background: #161b22; padding: 3rem; border-radius: 10px; border: 1px solid #30363d; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+                h1 { color: #58a6ff; margin-top: 0; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>🤖 AI PR Reviewer is Live!</h1>
+                <p>The webhook server is actively monitoring GitHub for new Pull Requests.</p>
+            </div>
+        </body>
+    </html>
+    """
 @app.post("/webhook")
 async def github_webhook(
         request: Request,
