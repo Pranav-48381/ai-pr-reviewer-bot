@@ -2,30 +2,30 @@ import os
 import json
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
 
-# Load the environment variables HERE, before the client initializes
 load_dotenv()
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-async def analyze_code_diff(filename: str, diff_text: str) -> dict:
+def analyze_code_diff(diff_text: str) -> str:
+    """
+    Synchronously analyzes a git diff and returns a formatted Markdown review.
+    """
     prompt = f"""
-    You are a senior engineer reviewing a file named '{filename}'.
-    Analyze the following git diff and output your review STRICTLY in JSON format.
+    You are a senior engineer reviewing a GitHub Pull Request.
+    Analyze the following git diff and output your review. 
+    Focus on code quality, security vulnerabilities, edge cases, and performance.
     
-    The JSON must have this exact structure:
+    You MUST output your response matching this exact JSON structure:
     {{
-        "filename": "{filename}",
-        "review_summary": "Overall summary.",
-        "complexity_analysis": {{
-            "time_complexity": "e.g., O(n)",
-            "space_complexity": "e.g., O(1)"
-        }},
+        "review_summary": "Overall summary of the changes.",
         "issues": [
             {{
-                "type": "Performance" | "Bug" | "Style",
-                "description": "Clear explanation.",
-                "suggestion": "Snippet of better code."
+                "file": "name of the file",
+                "type": "Performance" | "Bug" | "Security" | "Style",
+                "description": "Clear explanation of the issue.",
+                "suggestion": "How to fix it or improve it."
             }}
         ]
     }}
@@ -34,10 +34,28 @@ async def analyze_code_diff(filename: str, diff_text: str) -> dict:
     {diff_text}
     """
     
-    response = await client.aio.models.generate_content(
-        model='gemini-3.5-flash',
-        contents=prompt
+    # 1. Use the synchronous client with Native JSON generation
+    response = client.models.generate_content(
+        model='gemini-2.5-flash', # Or whichever model you prefer
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json"
+        )
     )
     
-    raw_text = response.text.replace("```json", "").replace("```", "").strip()
-    return json.loads(raw_text)
+    # 2. Parse the guaranteed JSON
+    review_data = json.loads(response.text)
+    
+    # 3. Format it into a clean Markdown string for the GitHub comment
+    markdown_comment = f"## 🤖 AI Code Review\n\n**Summary:** {review_data.get('review_summary', 'No summary provided.')}\n\n"
+    
+    issues = review_data.get("issues", [])
+    if not issues:
+        markdown_comment += "✅ Everything looks great! No major issues found."
+    else:
+        markdown_comment += "### Suggestions & Feedback:\n"
+        for issue in issues:
+            markdown_comment += f"* **[{issue['type']}] - `{issue['file']}`**: {issue['description']}\n"
+            markdown_comment += f"  * *Suggestion*: {issue['suggestion']}\n\n"
+            
+    return markdown_comment
